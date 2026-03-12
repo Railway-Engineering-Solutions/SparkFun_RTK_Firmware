@@ -1,8 +1,8 @@
 {
   "Configurations": [
     {
-      "Version": "4.5",
-      "URL": "https://raw.githubusercontent.com/Railway-Engineering-Solutions/SparkFun_RTK_Firmware/v4.5/Firmware/RTK_Surveyor_Firmware_v4.5.bin"
+      "Version": "4.6",
+      "URL": "https://raw.githubusercontent.com/Railway-Engineering-Solutions/SparkFun_RTK_Firmware/v4.6/Firmware/RTK_Surveyor_Firmware_v4.6.bin"
     }
   ]
 }
