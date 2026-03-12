@@ -45,8 +45,59 @@
 #define BATTERY_POWER_STATE_LEVEL_GOOD       (2 << 6)  // Bits 6-7: good level
 #define BATTERY_POWER_STATE_LEVEL_CRITICAL   (3 << 6)  // Bits 6-7: critically low
 
-// Forward declaration - implemented after BTLESerial
-class RtkControlPointCallback;
+// Forward declarations for firmware globals and functions used by BLE services.
+// These are defined in other .ino files but this header is included before them.
+extern uint8_t btMACAddress[];
+extern int battLevel;
+extern const char *const platformPrefixTable[];
+extern ProductVariant productVariant;
+#ifndef platformPrefix
+#define platformPrefix platformPrefixTable[productVariant]
+#endif
+void getFirmwareVersion(char *buffer, int bufferLength, bool includeDate);
+void requestChangeState(SystemState requestedState);
+void systemPrintln(const char *);
+void systemPrintf(const char *, ...);
+
+// BLE write callback for the RTK Control Point characteristic.
+// Must be defined before BTLESerial which instantiates it.
+class RtkControlPointCallback : public BLECharacteristicCallbacks
+{
+    void onWrite(BLECharacteristic *pCharacteristic)
+    {
+        std::string value = pCharacteristic->getValue();
+        if (value.length() < 1)
+            return;
+
+        uint8_t command = value[0];
+        switch (command)
+        {
+            case RTK_CMD_ENTER_WIFI_CONFIG:
+                systemPrintln("BLE: Requesting WiFi config mode");
+                requestChangeState(STATE_WIFI_CONFIG_NOT_STARTED);
+                break;
+
+            case RTK_CMD_REBOOT:
+                systemPrintln("BLE: Requesting reboot");
+                ESP.restart();
+                break;
+
+            case RTK_CMD_ENTER_ROVER:
+                systemPrintln("BLE: Requesting rover mode");
+                requestChangeState(STATE_ROVER_NOT_STARTED);
+                break;
+
+            case RTK_CMD_ENTER_BASE:
+                systemPrintln("BLE: Requesting base mode");
+                requestChangeState(STATE_BASE_NOT_STARTED);
+                break;
+
+            default:
+                systemPrintf("BLE: Unknown command 0x%02X\r\n", command);
+                break;
+        }
+    }
+};
 
 class BTSerialInterface
 {
@@ -356,46 +407,6 @@ class BTLESerial : public virtual BTSerialInterface, public BleSerial
         systemStateCharacteristic->setValue(&initialState, 1);
 
         ctrlService->start();
-    }
-};
-
-// BLE write callback for the RTK Control Point characteristic.
-// When the app writes a command byte, this triggers the corresponding action.
-class RtkControlPointCallback : public BLECharacteristicCallbacks
-{
-    void onWrite(BLECharacteristic *pCharacteristic)
-    {
-        std::string value = pCharacteristic->getValue();
-        if (value.length() < 1)
-            return;
-
-        uint8_t command = value[0];
-        switch (command)
-        {
-            case RTK_CMD_ENTER_WIFI_CONFIG:
-                systemPrintln("BLE: Requesting WiFi config mode");
-                requestChangeState(STATE_WIFI_CONFIG_NOT_STARTED);
-                break;
-
-            case RTK_CMD_REBOOT:
-                systemPrintln("BLE: Requesting reboot");
-                ESP.restart();
-                break;
-
-            case RTK_CMD_ENTER_ROVER:
-                systemPrintln("BLE: Requesting rover mode");
-                requestChangeState(STATE_ROVER_NOT_STARTED);
-                break;
-
-            case RTK_CMD_ENTER_BASE:
-                systemPrintln("BLE: Requesting base mode");
-                requestChangeState(STATE_BASE_NOT_STARTED);
-                break;
-
-            default:
-                systemPrintf("BLE: Unknown command 0x%02X\r\n", command);
-                break;
-        }
     }
 };
 
