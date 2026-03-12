@@ -419,6 +419,12 @@ void checkBatteryLevels()
             ledcWrite(ledGreenChannel, 0);
         }
     }
+
+#ifdef COMPILE_BT
+    // Update BLE Battery Service characteristics if BLE is active
+    if (bluetoothState != BT_OFF && bluetoothSerial != nullptr)
+        bluetoothSerial->updateBatteryService(battLevel, externalPowerConnected);
+#endif // COMPILE_BT
 }
 
 // Ping an I2C device and see if it responds
