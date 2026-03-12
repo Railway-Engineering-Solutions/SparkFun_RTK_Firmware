@@ -7,6 +7,7 @@
 
 #include <BleSerial.h> //Click here to get the library: http://librarymanager/All#ESP32_BleSerial v1.0.5 by Avinab Malla
 #include <BLEDevice.h>
+#include <BLE2902.h>
 
 // Standard BLE Service UUIDs
 #define BLE_DEVICE_INFORMATION_SERVICE_UUID  "180A"
@@ -363,6 +364,7 @@ class BTLESerial : public virtual BTSerialInterface, public BleSerial
         batteryLevelCharacteristic = battService->createCharacteristic(
             BLEUUID(BLE_BATTERY_LEVEL_UUID),
             BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+        batteryLevelCharacteristic->addDescriptor(new BLE2902());
         uint8_t initialLevel = (battLevel < 0) ? 0 : (battLevel > 100) ? 100 : (uint8_t)battLevel;
         batteryLevelCharacteristic->setValue(&initialLevel, 1);
 
@@ -370,6 +372,7 @@ class BTLESerial : public virtual BTSerialInterface, public BleSerial
         batteryPowerStateCharacteristic = battService->createCharacteristic(
             BLEUUID(BLE_BATTERY_POWER_STATE_UUID),
             BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+        batteryPowerStateCharacteristic->addDescriptor(new BLE2902());
         uint8_t initialState = BATTERY_POWER_STATE_PRESENT_YES
             | BATTERY_POWER_STATE_CHARGING_NO
             | BATTERY_POWER_STATE_DISCHARGING_YES
@@ -403,6 +406,7 @@ class BTLESerial : public virtual BTSerialInterface, public BleSerial
         systemStateCharacteristic = ctrlService->createCharacteristic(
             BLEUUID(BLE_RTK_SYSTEM_STATE_UUID),
             BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+        systemStateCharacteristic->addDescriptor(new BLE2902());
         uint8_t initialState = (uint8_t)systemState;
         systemStateCharacteristic->setValue(&initialState, 1);
 
