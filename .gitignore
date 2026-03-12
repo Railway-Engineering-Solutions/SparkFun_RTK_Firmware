@@ -2,6 +2,7 @@ partitions.csv
 
 tokens.h
 .vscode/*
+Firmware/RTK_Surveyor/build/
 
 # Windows image file caches
 Thumbs.db
@@ -57,3 +58,4 @@ Read_Map_File
 RTK_Reset
 Split_Messages
 X.509_crt_bundle_bin_to_c
+
