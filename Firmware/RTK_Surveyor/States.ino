@@ -1362,4 +1362,10 @@ void changeState(SystemState newState)
             systemPrintf("%s%s%s%s, %s.%03ld\r\n", asterisk, initialState, arrow, endingState, s, rtc.getMillis());
         }
     }
+
+#ifdef COMPILE_BT
+    // Notify BLE clients of state change
+    if (bluetoothState != BT_OFF && bluetoothSerial != nullptr)
+        bluetoothSerial->updateSystemState((uint8_t)newState);
+#endif // COMPILE_BT
 }

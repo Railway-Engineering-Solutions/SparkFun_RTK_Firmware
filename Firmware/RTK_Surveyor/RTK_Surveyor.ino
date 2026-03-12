@@ -247,9 +247,9 @@ char logFileName[sizeof("SFE_Reference_Station_230101_120101.ubx_plusExtraSpace"
 #endif  // COMPILE_WIFI
 
 #define OTA_FIRMWARE_JSON_URL                                                                                          \
-    "https://raw.githubusercontent.com/sparkfun/SparkFun_RTK_Firmware_Binaries/main/RTK-Firmware.json"
+    "https://raw.githubusercontent.com/Railway-Engineering-Solutions/SparkFun_RTK_Firmware/main/RTK-Firmware.json"
 #define OTA_RC_FIRMWARE_JSON_URL                                                                                       \
-    "https://raw.githubusercontent.com/sparkfun/SparkFun_RTK_Firmware_Binaries/main/RTK-RC-Firmware.json"
+    "https://raw.githubusercontent.com/Railway-Engineering-Solutions/SparkFun_RTK_Firmware/main/RTK-RC-Firmware.json"
 bool apConfigFirmwareUpdateInProcess = false; // Goes true once WiFi is connected and OTA pull begins
 unsigned int binBytesSent = 0;         // Tracks firmware bytes sent over WiFi OTA update via AP config.
 

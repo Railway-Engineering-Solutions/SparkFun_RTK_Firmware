@@ -24,7 +24,7 @@ OtaClient.ino
 #define HTTPS_TRANSPORT         (OTA_USE_SSL ? "https://" : "http://")
 
 #define OTA_JSON_FILE_URL       \
-    "/sparkfun/SparkFun_RTK_Firmware_Binaries/main/RTK-Firmware.json"
+    "/Railway-Engineering-Solutions/SparkFun_RTK_Firmware/main/RTK-Firmware.json"
 #define OTA_NO_PROGRESS_TIMEOUT (3 * 60 * 1000) // 3 minutes
 #define OTA_SERVER              "raw.githubusercontent.com"
 #define OTA_SERVER_PORT         443

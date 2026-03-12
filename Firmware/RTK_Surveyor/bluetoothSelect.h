@@ -23,6 +23,19 @@
 #define BLE_BATTERY_LEVEL_UUID       "2A19"
 #define BLE_BATTERY_POWER_STATE_UUID "2A1A"
 
+// Custom RTK Control Service UUIDs (vendor-specific 128-bit)
+#define BLE_RTK_CONTROL_SERVICE_UUID     "a0b40001-926d-4d61-98df-8c5c62ee53b3"
+#define BLE_RTK_CONTROL_POINT_UUID       "a0b40002-926d-4d61-98df-8c5c62ee53b3"  // Write: command byte
+#define BLE_RTK_WIFI_CONFIG_SSID_UUID    "a0b40003-926d-4d61-98df-8c5c62ee53b3"  // Read: AP SSID
+#define BLE_RTK_FIRMWARE_URL_UUID        "a0b40004-926d-4d61-98df-8c5c62ee53b3"  // Read: firmware update URL
+#define BLE_RTK_SYSTEM_STATE_UUID        "a0b40005-926d-4d61-98df-8c5c62ee53b3"  // Read+Notify: current system state
+
+// RTK Control Point command values
+#define RTK_CMD_ENTER_WIFI_CONFIG  0x01  // Enter WiFi AP config mode
+#define RTK_CMD_REBOOT             0x02  // Reboot the device
+#define RTK_CMD_ENTER_ROVER        0x03  // Enter rover mode
+#define RTK_CMD_ENTER_BASE         0x04  // Enter base mode
+
 // Battery Power State bitfield values
 #define BATTERY_POWER_STATE_PRESENT_YES      (3 << 0)  // Bits 0-1: battery present
 #define BATTERY_POWER_STATE_DISCHARGING_YES  (3 << 2)  // Bits 2-3: discharging
@@ -31,6 +44,9 @@
 #define BATTERY_POWER_STATE_CHARGING_NO      (2 << 4)  // Bits 4-5: not charging
 #define BATTERY_POWER_STATE_LEVEL_GOOD       (2 << 6)  // Bits 6-7: good level
 #define BATTERY_POWER_STATE_LEVEL_CRITICAL   (3 << 6)  // Bits 6-7: critically low
+
+// Forward declaration - implemented after BTLESerial
+class RtkControlPointCallback;
 
 class BTSerialInterface
 {
@@ -52,6 +68,9 @@ class BTSerialInterface
 
     // Update BLE GATT characteristics (battery level, etc.). No-op for classic BT.
     virtual void updateBatteryService(int batteryPercent, bool charging) {}
+
+    // Update BLE system state characteristic. No-op for classic BT.
+    virtual void updateSystemState(uint8_t state) {}
 };
 
 class BTClassicSerial : public virtual BTSerialInterface, public BluetoothSerial
@@ -123,10 +142,10 @@ class BTLESerial : public virtual BTSerialInterface, public BleSerial
     {
         BleSerial::begin(deviceName.c_str());
 
-        // Add Device Information Service and Battery Service after BleSerial
-        // has created the BLE server
+        // Add standard and custom BLE services after BleSerial has created the server
         setupDeviceInfoService();
         setupBatteryService();
+        setupControlService();
 
         // Re-start advertising so the new services are included
         Server->getAdvertising()->start();
@@ -185,6 +204,16 @@ class BTLESerial : public virtual BTSerialInterface, public BleSerial
         BleSerial::flush();
     }
 
+    // Update the system state characteristic so the app can track mode changes
+    void updateSystemState(uint8_t state)
+    {
+        if (systemStateCharacteristic != nullptr)
+        {
+            systemStateCharacteristic->setValue(&state, 1);
+            systemStateCharacteristic->notify();
+        }
+    }
+
     // Update Battery Service characteristics with current values
     void updateBatteryService(int batteryPercent, bool charging)
     {
@@ -233,6 +262,7 @@ class BTLESerial : public virtual BTSerialInterface, public BleSerial
     esp_spp_cb_t *connectionCallback;
     BLECharacteristic *batteryLevelCharacteristic = nullptr;
     BLECharacteristic *batteryPowerStateCharacteristic = nullptr;
+    BLECharacteristic *systemStateCharacteristic = nullptr;
 
     // Add BLE Device Information Service (0x180A) with static device info
     void setupDeviceInfoService()
@@ -296,6 +326,76 @@ class BTLESerial : public virtual BTSerialInterface, public BleSerial
         batteryPowerStateCharacteristic->setValue(&initialState, 1);
 
         battService->start();
+    }
+
+    // Add custom RTK Control Service for app-driven commands
+    void setupControlService()
+    {
+        BLEService *ctrlService = Server->createService(BLEUUID(BLE_RTK_CONTROL_SERVICE_UUID));
+
+        // Control Point (writable) - accepts command bytes from the app
+        BLECharacteristic *ctrlPointChar = ctrlService->createCharacteristic(
+            BLEUUID(BLE_RTK_CONTROL_POINT_UUID), BLECharacteristic::PROPERTY_WRITE);
+        ctrlPointChar->setCallbacks(new RtkControlPointCallback());
+
+        // WiFi Config SSID (read-only) - the AP SSID the device will broadcast
+        BLECharacteristic *ssidChar = ctrlService->createCharacteristic(
+            BLEUUID(BLE_RTK_WIFI_CONFIG_SSID_UUID), BLECharacteristic::PROPERTY_READ);
+        ssidChar->setValue("RTK Config");
+
+        // Firmware Update URL (read-only) - where the app should check for updates
+        BLECharacteristic *urlChar = ctrlService->createCharacteristic(
+            BLEUUID(BLE_RTK_FIRMWARE_URL_UUID), BLECharacteristic::PROPERTY_READ);
+        urlChar->setValue(OTA_FIRMWARE_JSON_URL);
+
+        // System State (read + notify) - current device state for the app to track
+        systemStateCharacteristic = ctrlService->createCharacteristic(
+            BLEUUID(BLE_RTK_SYSTEM_STATE_UUID),
+            BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+        uint8_t initialState = (uint8_t)systemState;
+        systemStateCharacteristic->setValue(&initialState, 1);
+
+        ctrlService->start();
+    }
+};
+
+// BLE write callback for the RTK Control Point characteristic.
+// When the app writes a command byte, this triggers the corresponding action.
+class RtkControlPointCallback : public BLECharacteristicCallbacks
+{
+    void onWrite(BLECharacteristic *pCharacteristic)
+    {
+        std::string value = pCharacteristic->getValue();
+        if (value.length() < 1)
+            return;
+
+        uint8_t command = value[0];
+        switch (command)
+        {
+            case RTK_CMD_ENTER_WIFI_CONFIG:
+                systemPrintln("BLE: Requesting WiFi config mode");
+                requestChangeState(STATE_WIFI_CONFIG_NOT_STARTED);
+                break;
+
+            case RTK_CMD_REBOOT:
+                systemPrintln("BLE: Requesting reboot");
+                ESP.restart();
+                break;
+
+            case RTK_CMD_ENTER_ROVER:
+                systemPrintln("BLE: Requesting rover mode");
+                requestChangeState(STATE_ROVER_NOT_STARTED);
+                break;
+
+            case RTK_CMD_ENTER_BASE:
+                systemPrintln("BLE: Requesting base mode");
+                requestChangeState(STATE_BASE_NOT_STARTED);
+                break;
+
+            default:
+                systemPrintf("BLE: Unknown command 0x%02X\r\n", command);
+                break;
+        }
     }
 };
 
