@@ -1,0 +1,53 @@
+  Root cause: missing GGA feedback to NTRIP caster
+
+  The NtripClient.sendGga() method was a stub — an empty body with a TODO comment. Most NTRIP V2 casters (especially VRS/networked
+  RTK like Geoscience Australia's AUSCORS) require the client to periodically send its GGA position so the caster can compute
+  corrections for the client's actual location. Without this:
+
+  1. The caster initially sends corrections based on a default/mountpoint position
+  2. These work for a while if the client is near the mountpoint
+  3. Over time (minutes), the corrections become less relevant as the caster has no feedback about where the client actually is
+  4. The fix degrades from RTK Fix/Float back to standalone GPS
+  5. Data keeps flowing (bytes received and forwarded keep increasing) but the corrections are no longer valid for the client's
+  position
+
+  Fixes applied
+
+  ntrip_client.dart — Implemented sendGga(). It POSTs the GGA sentence to the caster via the same HTTP connection. Non-fatal on
+  failure (some mountpoints don't accept GGA).
+
+  rtk_store.dart — Three fixes:
+
+  1. GGA feedback timer (_startNtripGgaFeedback) — sends the current position to the caster immediately on connect, then every 30
+  seconds. Builds a valid NMEA GGA sentence with proper ddmm.mmmmm coordinate format and checksum. Runs during both initial connect
+   and reconnection.
+  2. Watchdog race condition — added if (_ntripReconnecting) return; guard so that when a reconnection is in progress, the watchdog
+   doesn't reset _ntripReconnectAttempts back to 0 on the next tick (which was preventing the reconnection from completing).
+  3. GGA timer cleanup — cancelled in stopNtrip() alongside the watchdog timer.
+
+  If this is a firmware issue
+
+  If the problem persists after these changes (GGA is being sent, data is flowing, but corrections still drop), the issue may be on
+   the SparkFun RTK Surveyor firmware side. To diagnose:
+
+  Data needed from the device:
+  - Firmware version (firmwareVersion in RTK Details)
+  - Whether the white RTK LED stops flashing when corrections drop
+  - The device's system log (accessible via USB serial at 115200 baud, or via the device's WiFi config page at 192.168.4.1 when in
+  WiFi Config mode)
+
+  Steps to capture device-side diagnostics:
+  1. Connect to the RTK Surveyor via USB-C to a computer
+  2. Open a serial terminal (e.g. CoolTerm, PuTTY) at 115200 baud
+  3. Reproduce the correction dropout
+  4. Look for messages like RTCM parse error, No RTCM data, RTCM timeout, or BLE buffer overflow
+  5. Check if the device reports RTCM CRC errors — this indicates the chunking or BLE transport is corrupting data
+
+  Possible firmware-level causes:
+  - BLE receive buffer overflow — the device's NUS RX buffer may be smaller than the incoming data rate. The current 240-byte chunk
+   size should be safe, but some firmware versions have a 128-byte buffer. Try reducing chunkSize to 128.
+  - RTCM message boundary alignment — the device expects complete RTCM3 messages. BLE chunking splits messages arbitrarily. Most
+  firmware reassembles, but some older versions require message-aligned writes.
+  - Firmware bug in RTCM state machine — some SparkFun firmware versions (pre-3.12) had a bug where the RTCM parser would enter an
+  error state and stop processing corrections until the device was power-cycled. The fix was in firmware 3.12+. Check
+  firmwareVersion and update if behind.

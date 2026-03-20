@@ -74,8 +74,10 @@ volatile static RING_BUFFER_OFFSET dataHead; // Head advances as data comes in f
 volatile int32_t availableHandlerSpace;      // settings.gnssHandlerBufferSize - usedSpace
 volatile const char *slowConsumer;
 
-// Buffer the incoming Bluetooth stream so that it can be passed in bulk over I2C
-uint8_t bluetoothOutgoingToZed[100];
+// Buffer the incoming Bluetooth stream so that it can be passed in bulk over I2C.
+// 512 bytes accommodates typical RTCM3 messages without fragmentation and reduces
+// the risk of BLE RX buffer overflow when corrections arrive faster than I2C can drain.
+uint8_t bluetoothOutgoingToZed[512];
 uint16_t bluetoothOutgoingToZedHead;
 unsigned long lastZedI2CSend; // Timestamp of the last time we sent RTCM ZED over I2C
 
@@ -193,7 +195,7 @@ void btReadTask(void *e)
             }
         } // End bluetoothGetState() == BT_CONNECTED
 
-        if (bluetoothOutgoingToZedHead > 0 && ((millis() - lastZedI2CSend) > 100))
+        if (bluetoothOutgoingToZedHead > 0 && ((millis() - lastZedI2CSend) > 20))
         {
             sendZedI2CBuffer(); // Send any outstanding RTCM
         }
