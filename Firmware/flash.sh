@@ -5,7 +5,7 @@
 # Usage:
 #   ./flash.sh                        # Flash using pre-built binaries, auto-detect port
 #   ./flash.sh /dev/cu.usbserial-XXX  # Flash to a specific port
-#   ./flash.sh --build                # Build v4.6 first, then flash
+#   ./flash.sh --build                # Build v4.7 first, then flash
 #   ./flash.sh --build --port /dev/X  # Build and flash to specific port
 #   ./flash.sh --baud 921600          # Use custom baud rate
 #
@@ -71,8 +71,8 @@ detect_port() {
 
 # ── Build (optional) ────────────────────────────────────────────────
 if $DO_BUILD; then
-    info "Building firmware v4.6..."
-    "$SCRIPT_DIR/build.sh" --version 4 6
+    info "Building firmware v4.7..."
+    "$SCRIPT_DIR/build.sh" --version 4 7
     echo ""
 fi
 
